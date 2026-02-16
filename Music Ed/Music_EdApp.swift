@@ -6,12 +6,13 @@
 //
 
 import SwiftUI
-
+import SwiftData
 @main
-struct Music_EdApp: App {
+struct MusicEdApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView() // Or whichever view holds your login/signup logic
         }
+        .modelContainer(for: UserAccount.self) // <--- THIS IS REQUIRED
     }
 }

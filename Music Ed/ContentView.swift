@@ -8,14 +8,47 @@
 import SwiftUI
 
 struct ContentView: View {
+    // This variable is the "Master Switch" for the whole app
+    @State private var isAuthenticated = false
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        ZStack{
+            if isAuthenticated {
+                HomeView(isLoggedIn: $isAuthenticated) // Show Home if logged in
+            } else {
+                NavigationStack {
+                    VStack {
+                        Text("Welcome to Music Ed")
+                            .font(.largeTitle)
+                            .fontWeight(.black)
+                            .padding(.bottom,  42)
+                        
+                        // Pass the binding to the LoginScreen
+                        NavigationLink(destination: LoginScreen(isLoggedIn: $isAuthenticated)) {
+                            Text("Log In")
+                                .fontWeight(.heavy)
+                                .font(.title3)
+                                .frame(maxWidth: 350)
+                                .padding()
+                                .foregroundColor(.white)
+                                .background(.pink)
+                                .cornerRadius(40)
+                        }
+                        
+                        NavigationLink(destination: SignupScreen()) {
+                            Text("Sign Up")
+                                .fontWeight(.heavy)
+                                .font(.title3)
+                                .frame(maxWidth: 350)
+                                .padding()
+                                .foregroundColor(.white)
+                                .background(.pink)
+                                .cornerRadius(40)
+                        }
+                    }
+                }
+            }
         }
-        .padding()
     }
 }
 
