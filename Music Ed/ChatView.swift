@@ -1,5 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import SoundAnalysis
+import Vision
+import Foundation
+    
 
 struct ChatView: View {
     @Binding var isLoggedIn: Bool
@@ -8,14 +12,12 @@ struct ChatView: View {
         ChatMessage(text: "Hi! I'm your Music Ed Tutor. What are we practicing today?", isUser: false)
     ]
     @State private var newMessage = ""
-    
-    // --- NEW STATE FOR FILES ---
     @State private var isImporting = false
     @State private var selectedFiles: [URL] = []
     
     var body: some View {
         VStack(spacing: 0) {
-            // Chat History
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -68,14 +70,21 @@ struct ChatView: View {
         // --- FILE PICKER MODIFIER ---
         .fileImporter(
             isPresented: $isImporting,
-            allowedContentTypes: [.item], // Allows all file types, or use [.pdf, .audio, .movie]
+            allowedContentTypes: [.audio, .image, .pdf], // Specific types are better
             allowsMultipleSelection: true
         ) { result in
             switch result {
             case .success(let urls):
-                selectedFiles.append(contentsOf: urls)
+                for url in urls {
+                    if url.startAccessingSecurityScopedResource() {
+                        defer { url.stopAccessingSecurityScopedResource() }
+                        
+                        // Now you can safely pass this URL to your analysis functions
+                        selectedFiles.append(url)
+                    }
+                }
             case .failure(let error):
-                print("Error picking files: \(error.localizedDescription)")
+                print("Error: \(error.localizedDescription)")
             }
         }
     }
@@ -94,7 +103,7 @@ struct ChatView: View {
                         }
                     }
                     .padding(8)
-                    .background(Color.pink.opacity(0.1))
+                    .background(Color.pink.opacity(0.5))
                     .cornerRadius(8)
                 }
             }
@@ -106,36 +115,61 @@ struct ChatView: View {
     
     func sendMessage() {
         let trimmed = newMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Guard against empty send (must have text or files)
         guard !trimmed.isEmpty || !selectedFiles.isEmpty else { return }
-        
-        // 1. Map URLs to simple Strings for the Bubble
+
         let fileNames = selectedFiles.map { $0.lastPathComponent }
-        
-        // 2. Create the message
         let userMsg = ChatMessage(
             text: trimmed,
             isUser: true,
             attachmentNames: fileNames.isEmpty ? nil : fileNames
         )
-        
         messages.append(userMsg)
         
-        // 3. Clear inputs
+        // Cache current files before wiping state arrays
+        let filesToProcess = selectedFiles
+        
+        // Clear inputs immediately for smooth UI response
         newMessage = ""
         selectedFiles = []
         
-        // Mock AI Response
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            let aiMsg = ChatMessage(text: "I see your files! Let me analyze them.", isUser: false, attachmentNames: nil)
-            messages.append(aiMsg)
+        // Process audio files asynchronously
+        for url in filesToProcess {
+            let type = UTType(filenameExtension: url.pathExtension)
+            
+            if type?.conforms(to: .audio) == true {
+                let loadingMsg = ChatMessage(text: "analyzing your audio...", isUser: false)
+                messages.append(loadingMsg)
+                
+                DispatchQueue.global(qos: .userInitiated).async {
+                    analyzeUploadedAudio(url: url) { dynamicFeedback in
+                        DispatchQueue.main.async {
+                            let aiMsg = ChatMessage(text: dynamicFeedback, isUser: false)
+                            messages.append(aiMsg)
+                        }
+                    }
+                }
+            } else if type?.conforms(to: .image) == true || type?.conforms(to: .pdf) == true {
+                if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
+                    SheetMusicScanner().scanImage(image: img)
+                }
+            }
         }
     }
     
     func uploadVideo() {
         isImporting = true
     }
+}
+func evaluatePerformance(userNotes: [String], targetSong: SongTemplate) -> String {
+    var matches = 0
+    for (index, note) in userNotes.enumerated() {
+        if index < targetSong.notes.count && note == targetSong.notes[index].pitchName {
+            matches += 1
+        }
+    }
+    
+    let scorePercentage = (Double(matches) / Double(targetSong.notes.count)) * 100
+    return "You matched \(Int(scorePercentage))% of the target sheet music!"
 }
 
 #Preview {

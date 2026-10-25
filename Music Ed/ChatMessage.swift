@@ -17,3 +17,4 @@ struct ChatMessage: Identifiable {
     var timestamp = Date()
 };var timestamp: Date = Date()
 
+

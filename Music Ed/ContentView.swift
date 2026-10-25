@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct ContentView: View {
-    // This variable is the "Master Switch" for the whole app
     @State private var isAuthenticated = false
     
     var body: some View {
@@ -24,7 +23,7 @@ struct ContentView: View {
                             .padding(.bottom,  42)
                         
                         // Pass the binding to the LoginScreen
-                        NavigationLink(destination: LoginScreen(isLoggedIn: $isAuthenticated)) {
+                        NavigationLink(destination:LoginScreen(isLoggedIn: $isAuthenticated)) {
                             Text("Log In")
                                 .fontWeight(.heavy)
                                 .font(.title3)

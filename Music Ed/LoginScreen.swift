@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+
 struct LoginScreen: View {
     @Binding var isLoggedIn: Bool
     @State private var username = ""
@@ -8,6 +9,7 @@ struct LoginScreen: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allUsers: [UserAccount]
     @State private var errorMessage = ""
+    @Query private var allAccounts: [UserAccount]
     
     var body: some View {
         GeometryReader { proxy in
@@ -67,30 +69,39 @@ struct LoginScreen: View {
 
                 Spacer()
             }
+            .onAppear {
+                print("DEBUG - Accounts currently in database: \(allUsers.map { "User: '\($0.username)', Pass: '\($0.password)'" })")}
         }
     }
 
     // This function handles the logic when the button is pressed
+
+
     func authenticateUser() {
-        let userPredicate = #Predicate<UserAccount> { user in
-            user.username == username && user.password == password
+        if username.isEmpty || password.isEmpty {
+            errorMessage = "Please fill in all fields."
+            return
         }
         
-        let descriptor = FetchDescriptor<UserAccount>(predicate: userPredicate)
+        // Check if an account matches the username and password
+        let cleanUser = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanPass = password.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        do {
-            let matches = try modelContext.fetch(descriptor)
-            if !matches.isEmpty {
-                withAnimation { isLoggedIn = true }
-            } else {
-                errorMessage = "Invalid username or password."
+        if let match = allAccounts.first(where: { 
+            $0.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == cleanUser && 
+            $0.password.trimmingCharacters(in: .whitespacesAndNewlines) == cleanPass
+        }) {
+            print("Login matched user: \(match.username)")
+            withAnimation {
+                isLoggedIn = true // This takes you to your Home screen!
             }
-        } catch {
-            errorMessage = "Database fetch error."
+        } else {
+            errorMessage = "Invalid username or password."
         }
     }
 }
 
 #Preview {
     LoginScreen(isLoggedIn: .constant(false))
+        .modelContainer(for: UserAccount.self)
 }

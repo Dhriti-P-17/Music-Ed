@@ -35,6 +35,7 @@ struct SignupScreen: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(10)
                         .textInputAutocapitalization(.never)
+                        
                     
                     SecureField("Password", text: $password)
                         .padding()
