@@ -15,11 +15,7 @@ struct HomeView: View {
         NavigationStack {
             
             TabView {
-                Tab("Profile", systemImage: "person.crop.circle.fill") {
-                    ProfileView()
-                }
-                
-                Tab("Chatbot", systemImage: "sparkles") {
+                Tab("AI Feedback", systemImage: "sparkles") {
                     ChatView(isLoggedIn: $isLoggedIn)
                 }
                 

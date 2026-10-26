@@ -17,7 +17,7 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-
+            
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -44,14 +44,11 @@ struct ChatView: View {
             
             // Input Area
             HStack(spacing: 15) {
-                TextField("Ask about music theory...", text: $newMessage)
-                    .padding(12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(20)
+                
                 
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
-                        // Enable if there is text OR files
+                    // Enable if there is text OR files
                         .foregroundColor(newMessage.isEmpty && selectedFiles.isEmpty ? .gray : .pink)
                         .font(.system(size: 22))
                 }
@@ -68,112 +65,155 @@ struct ChatView: View {
         }
         .navigationTitle("AI Tutor")
         // --- FILE PICKER MODIFIER ---
-        .fileImporter(
-            isPresented: $isImporting,
-            allowedContentTypes: [.audio, .image, .pdf], // Specific types are better
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                for url in urls {
-                    if url.startAccessingSecurityScopedResource() {
-                        defer { url.stopAccessingSecurityScopedResource() }
-                        
-                        // Now you can safely pass this URL to your analysis functions
-                        selectedFiles.append(url)
+        // --- FILE PICKER MODIFIER ---
+                .fileImporter(
+                    isPresented: $isImporting,
+                    allowedContentTypes: [.audio, .image, .pdf, UTType(filenameExtension: "musicxml") ?? .data, UTType(filenameExtension: "xml") ?? .data],
+                    allowsMultipleSelection: true
+                ) { result in
+                    switch result {
+                    case .success(let urls):
+                        for url in urls {
+                            if url.startAccessingSecurityScopedResource() {
+                                defer { url.stopAccessingSecurityScopedResource() }
+                                selectedFiles.append(url)
+                            }
+                        }
+                    case .failure(let error):
+                        print("Error: \(error.localizedDescription)")
                     }
                 }
-            case .failure(let error):
-                print("Error: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    // --- PREVIEW UI FOR SELECTED FILES ---
-    private var filePreviewBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
-                ForEach(selectedFiles, id: \.self) { url in
+            } // <-- Closes var body
+
+            // --- PREVIEW UI FOR SELECTED FILES ---
+            private var filePreviewBar: some View {
+                ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                        Text(url.lastPathComponent)
-                            .font(.caption)
-                        Button(action: { selectedFiles.removeAll { $0 == url } }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
+                        ForEach(selectedFiles, id: \.self) { url in
+                            HStack {
+                                Text(url.lastPathComponent)
+                                    .font(.caption)
+                                Button(action: { selectedFiles.removeAll { $0 == url } }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.pink.opacity(0.5))
+                            .cornerRadius(8)
                         }
                     }
-                    .padding(8)
-                    .background(Color.pink.opacity(0.5))
-                    .cornerRadius(8)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
                 }
+                .background(Color(.systemGray6).opacity(0.5))
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-        }
-        .background(Color(.systemGray6).opacity(0.5))
-    }
-    
-    func sendMessage() {
-        let trimmed = newMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || !selectedFiles.isEmpty else { return }
 
-        let fileNames = selectedFiles.map { $0.lastPathComponent }
-        let userMsg = ChatMessage(
-            text: trimmed,
-            isUser: true,
-            attachmentNames: fileNames.isEmpty ? nil : fileNames
-        )
-        messages.append(userMsg)
-        
-        // Cache current files before wiping state arrays
-        let filesToProcess = selectedFiles
-        
-        // Clear inputs immediately for smooth UI response
-        newMessage = ""
-        selectedFiles = []
-        
-        // Process audio files asynchronously
-        for url in filesToProcess {
-            let type = UTType(filenameExtension: url.pathExtension)
-            
-            if type?.conforms(to: .audio) == true {
-                let loadingMsg = ChatMessage(text: "analyzing your audio...", isUser: false)
-                messages.append(loadingMsg)
+            func sendMessage() {
+                let trimmed = newMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty || !selectedFiles.isEmpty else { return }
+
+                let fileNames = selectedFiles.map { $0.lastPathComponent }
+                let userMsg = ChatMessage(
+                    text: trimmed,
+                    isUser: true,
+                    attachmentNames: fileNames.isEmpty ? nil : fileNames
+                )
+                messages.append(userMsg)
                 
-                DispatchQueue.global(qos: .userInitiated).async {
-                    analyzeUploadedAudio(url: url) { dynamicFeedback in
-                        DispatchQueue.main.async {
-                            let aiMsg = ChatMessage(text: dynamicFeedback, isUser: false)
-                            messages.append(aiMsg)
+                let filesToProcess = selectedFiles
+                newMessage = ""
+                selectedFiles = []
+                
+                let audioFiles = filesToProcess.filter { url in
+                    let type = UTType(filenameExtension: url.pathExtension)
+                    return type?.conforms(to: .audio) == true
+                }
+                
+                let scoreFiles = filesToProcess.filter { url in
+                    let ext = url.pathExtension.lowercased()
+                    return ext == "xml" || ext == "musicxml" || ext == "pdf"
+                }
+                
+                for audioURL in audioFiles {
+                    let loadingMsg = ChatMessage(text: "analyzing your audio...", isUser: false)
+                    messages.append(loadingMsg)
+                    
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        var targetNotes: [TargetNote] = []
+                        
+                        // Prioritize XML/MusicXML files first so it doesn't accidentally grab the PDF
+                        // Prioritize XML/MusicXML files first so it doesn't accidentally grab the PDF
+                                    let scoreURL = scoreFiles.first(where: {
+                                        $0.pathExtension.lowercased() == "musicxml" || $0.pathExtension.lowercased() == "xml"
+                                    }) ?? scoreFiles.first
+                                    
+                                    if let scoreURL = scoreURL {
+                                        let ext = scoreURL.pathExtension.lowercased()
+                                        
+                                        if scoreURL.startAccessingSecurityScopedResource() {
+                                            defer { scoreURL.stopAccessingSecurityScopedResource() }
+                                            
+                                            if ext == "xml" || ext == "musicxml" {
+                                                if let xmlData = try? Data(contentsOf: scoreURL) {
+                                                    let parser = MusicXMLParser()
+                                                    targetNotes = parser.parse(data: xmlData)
+                                                }
+                                            }
+                                        }
+                                    }
+                                     
+                                    analyzeUploadedAudio(audioURL: audioURL, targetNotes: targetNotes) { dynamicFeedback in
+                                        DispatchQueue.main.async {
+                                            let aiMsg = ChatMessage(text: dynamicFeedback, isUser: false)
+                                            messages.append(aiMsg)
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-            } else if type?.conforms(to: .image) == true || type?.conforms(to: .pdf) == true {
-                if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
-                    SheetMusicScanner().scanImage(image: img)
-                }
+
+                        func uploadVideo() {
+                            isImporting = true
+                        }
+        } // <-- Closes ChatView struct perfectly
+
+        // MARK: - Helper Functions & Models
+func evaluatePerformance(userNotes: [String], targetSong: SongTemplate) -> Int {
+    let targetNotes = targetSong.notes.map { $0.note.uppercased() }
+    guard !targetNotes.isEmpty, !userNotes.isEmpty else { return 0 }
+    
+    let cleanedUserNotes = userNotes.map { $0.uppercased() }
+    
+    var matches = 0
+    var targetIndex = 0
+    let tolerance = 2 // Allows a small lookahead window for audio detection variance
+    
+    for userNote in cleanedUserNotes {
+        var foundMatch = false
+        let scanLimit = min(targetIndex + tolerance, targetNotes.count)
+        
+        // Look ahead within the tolerance window for the correct next note in sequence
+        for i in targetIndex..<scanLimit {
+            if targetNotes[i] == userNote {
+                matches += 1
+                targetIndex = i + 1 // Advance past the matched note
+                foundMatch = true
+                break
             }
         }
-    }
-    
-    func uploadVideo() {
-        isImporting = true
-    }
-}
-func evaluatePerformance(userNotes: [String], targetSong: SongTemplate) -> String {
-    var matches = 0
-    for (index, note) in userNotes.enumerated() {
-        if index < targetSong.notes.count && note == targetSong.notes[index].pitchName {
-            matches += 1
+        
+        if targetIndex >= targetNotes.count {
+            break
         }
     }
     
-    let scorePercentage = (Double(matches) / Double(targetSong.notes.count)) * 100
-    return "You matched \(Int(scorePercentage))% of the target sheet music!"
+    // Calculate authentic percentage based on correct chronological sequence
+    let score = (Double(matches) / Double(targetNotes.count)) * 100.0
+    return min(max(Int(score), 0), 100)
 }
-
 #Preview {
-    NavigationStack {
-        ChatView(isLoggedIn: .constant(true))
-    }
-}
+            NavigationStack {
+                ChatView(isLoggedIn: .constant(true))
+            }
+        }
