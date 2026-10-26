@@ -142,8 +142,6 @@ struct ChatView: View {
                     DispatchQueue.global(qos: .userInitiated).async {
                         var targetNotes: [TargetNote] = []
                         
-                        // Prioritize XML/MusicXML files first so it doesn't accidentally grab the PDF
-                        // Prioritize XML/MusicXML files first so it doesn't accidentally grab the PDF
                                     let scoreURL = scoreFiles.first(where: {
                                         $0.pathExtension.lowercased() == "musicxml" || $0.pathExtension.lowercased() == "xml"
                                     }) ?? scoreFiles.first
@@ -176,9 +174,9 @@ struct ChatView: View {
                         func uploadVideo() {
                             isImporting = true
                         }
-        } // <-- Closes ChatView struct perfectly
+        }
 
-        // MARK: - Helper Functions & Models
+
 func evaluatePerformance(userNotes: [String], targetSong: SongTemplate) -> Int {
     let targetNotes = targetSong.notes.map { $0.note.uppercased() }
     guard !targetNotes.isEmpty, !userNotes.isEmpty else { return 0 }
